@@ -1048,7 +1048,7 @@ function montrerFerme() {
   for (const n of [$("fermer"), $("mois"), $("banniere-arret"), document.querySelector("header nav")]) n.hidden = true;
   $("vue").replaceChildren(el("section", { "aria-labelledby": "t-ferme" }, [
     el("h1", { id: "t-ferme", texte: "L'outil est fermé" }),
-    el("p", { classe: "intro", texte: "Vos fichiers du mois sont gardés sur cet ordinateur. Vous pouvez fermer cet onglet." }),
+    el("p", { classe: "intro", texte: "Vos fichiers du mois sont gardés sur cet ordinateur. Vous pouvez fermer cette fenêtre." }),
     el("p", { texte: "Pour rouvrir l'outil, cliquez sur l'icône « Planning des perms » sur le bureau." }),
   ]));
   annoncer("L'outil est fermé.");
@@ -1067,6 +1067,13 @@ for (const b of document.querySelectorAll("#etapes button")) {
 }
 
 $("fermer").addEventListener("click", fermerOutil);
+// Fenêtre fermée (ou rechargée) : l'outil s'arrête plus tôt, sauf si une requête suit. `keepalive` laisse partir
+// la requête après la page, avec les mêmes en-têtes qu'api() (JSON, Origin) : sendBeacon ne le permet pas.
+window.addEventListener("pagehide", () => {
+  if (etat.ferme) return;
+  fetch("/api/fermeture", { method: "POST", keepalive: true, headers: { "Content-Type": "application/json" }, body: "{}" })
+    .catch(() => { /* outil déjà arrêté */ });
+});
 for (const evenement of ["click", "keydown"]) document.addEventListener(evenement, noterAction, true);
 demarrerPresence();
 

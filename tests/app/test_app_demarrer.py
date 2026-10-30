@@ -1,9 +1,11 @@
 """Lanceur léger du raccourci (demarrer.py) : page d'attente tout de suite, une seule instance, port choisi."""
 import json
+import os
 import socket
 import subprocess
 import sys
 import time
+import types
 import uuid
 
 import pytest
@@ -172,3 +174,112 @@ def test_choix_du_port():
         occupe = s.getsockname()[1]
         autre = demarrer.choisir_port(occupe)
         assert autre != occupe and demarrer.port_libre(autre)
+
+
+# ---------------------------------------------------------------- fenêtre d'application (Chrome, Edge, repli)
+
+EMPLACEMENTS = ("ProgramFiles", "ProgramFiles(x86)", "LOCALAPPDATA")
+
+
+@pytest.fixture
+def navigateurs(tmp_path, monkeypatch):
+    """Poste Windows fictif : trois dossiers de base vides, Popen et webbrowser.open enregistrés."""
+    for nom in EMPLACEMENTS:
+        monkeypatch.setenv(nom, str(tmp_path / nom))
+    monkeypatch.delenv("PLANNING_PERMS_NAVIGATEUR", raising=False)
+    monkeypatch.setattr(sys, "platform", "win32")
+    appels = types.SimpleNamespace(popen=[], web=[], echecs=set())
+
+    def faux_popen(commande, **_kw):
+        if commande[0] in appels.echecs:
+            raise OSError("lancement refusé")
+        appels.popen.append(commande)
+
+    monkeypatch.setattr(demarrer.subprocess, "Popen", faux_popen)
+    monkeypatch.setattr(demarrer.webbrowser, "open", lambda adresse: appels.web.append(adresse))
+
+    def installer(*chemins_relatifs_et_base):
+        """Crée de faux .exe : (base, chemin relatif) -> chemin du fichier."""
+        crees = []
+        for base, relatif in chemins_relatifs_et_base:
+            exe = tmp_path / base / relatif
+            exe.parent.mkdir(parents=True, exist_ok=True)
+            exe.write_bytes(b"")
+            crees.append(str(exe))
+        return crees
+
+    appels.installer = installer
+    return appels
+
+
+CHROME = os.path.join("Google", "Chrome", "Application", "chrome.exe")
+EDGE = os.path.join("Microsoft", "Edge", "Application", "msedge.exe")
+ADRESSE = "http://127.0.0.1:8765/"
+
+
+def test_chrome_puis_edge_dans_cet_ordre(navigateurs):
+    chrome, edge = navigateurs.installer(("ProgramFiles", CHROME), ("ProgramFiles(x86)", EDGE))
+    assert demarrer.trouver_navigateurs() == [chrome, edge]
+    demarrer.ouvrir_navigateur(ADRESSE)
+    assert navigateurs.popen == [[chrome, f"--app={ADRESSE}"]]
+    assert navigateurs.web == []
+
+
+@pytest.mark.parametrize("base", EMPLACEMENTS)
+def test_edge_seul_dans_chacun_des_trois_emplacements(navigateurs, base):
+    (edge,) = navigateurs.installer((base, EDGE))
+    assert demarrer.trouver_navigateurs() == [edge]
+    demarrer.ouvrir_navigateur(ADRESSE)
+    assert navigateurs.popen == [[edge, f"--app={ADRESSE}"]]
+    assert navigateurs.web == []
+
+
+@pytest.mark.parametrize("base", EMPLACEMENTS)
+def test_chrome_seul_dans_chacun_des_trois_emplacements(navigateurs, base):
+    (chrome,) = navigateurs.installer((base, CHROME))
+    assert demarrer.trouver_chrome() == chrome
+    demarrer.ouvrir_navigateur(ADRESSE)
+    assert navigateurs.popen == [[chrome, f"--app={ADRESSE}"]]
+
+
+def test_chrome_qui_ne_se_lance_pas_laisse_la_place_a_edge(navigateurs):
+    chrome, edge = navigateurs.installer(("ProgramFiles", CHROME), ("ProgramFiles", EDGE))
+    navigateurs.echecs.add(chrome)
+    demarrer.ouvrir_navigateur(ADRESSE)
+    assert navigateurs.popen == [[edge, f"--app={ADRESSE}"]]
+    assert navigateurs.web == []
+
+
+def test_aucun_navigateur_ouvre_l_onglet_par_defaut(navigateurs):
+    assert demarrer.trouver_navigateurs() == []
+    demarrer.ouvrir_navigateur(ADRESSE)
+    assert navigateurs.popen == []
+    assert navigateurs.web == [ADRESSE]
+
+
+def test_les_deux_navigateurs_refusent_de_se_lancer(navigateurs):
+    chrome, edge = navigateurs.installer(("ProgramFiles", CHROME), ("ProgramFiles", EDGE))
+    navigateurs.echecs.update({chrome, edge})
+    demarrer.ouvrir_navigateur(ADRESSE)
+    assert navigateurs.popen == [] and navigateurs.web == [ADRESSE]
+
+
+def test_hors_windows_onglet_par_defaut_meme_avec_chrome(navigateurs, monkeypatch):
+    navigateurs.installer(("ProgramFiles", CHROME), ("ProgramFiles", EDGE))
+    monkeypatch.setattr(sys, "platform", "linux")
+    demarrer.ouvrir_navigateur(ADRESSE)
+    assert navigateurs.popen == [] and navigateurs.web == [ADRESSE]
+
+
+def test_navigateur_impose_recoit_l_adresse_sans_mode_application(navigateurs, monkeypatch):
+    navigateurs.installer(("ProgramFiles", CHROME))
+    monkeypatch.setenv("PLANNING_PERMS_NAVIGATEUR", json.dumps(["faux-navigateur", "--option"]))
+    demarrer.ouvrir_navigateur(ADRESSE)
+    assert navigateurs.popen == [["faux-navigateur", "--option", ADRESSE]]
+    assert navigateurs.web == []
+
+
+def test_commande_fenetre_avec_la_page_d_attente():
+    adresse = demarrer.adresse_attente(8765)
+    assert adresse.startswith("file://") and adresse.endswith("#8765")
+    assert demarrer.commande_fenetre("navigateur.exe", adresse) == ["navigateur.exe", f"--app={adresse}"]

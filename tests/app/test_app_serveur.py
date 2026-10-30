@@ -4,6 +4,7 @@ import json
 import sys
 import threading
 import time
+import urllib.error
 import urllib.request
 
 import pytest
@@ -584,7 +585,7 @@ def test_ouvrir_navigateur_prefere_chrome(dossiers_programmes, monkeypatch):
     monkeypatch.setattr(serveur.subprocess, "Popen", lambda args, **kw: lances.append(args))
     monkeypatch.setattr(serveur.webbrowser, "open", lambda url: lances.append(("defaut", url)))
     serveur.ouvrir_navigateur("http://127.0.0.1:8765/")
-    assert lances == [[chrome, "http://127.0.0.1:8765/"]]
+    assert lances == [[chrome, "--app=http://127.0.0.1:8765/"]]  # fenêtre d'application, plus un onglet
 
 
 def test_ouvrir_navigateur_repli_sur_le_navigateur_par_defaut(dossiers_programmes, monkeypatch):
@@ -612,3 +613,109 @@ def test_arreter_tue_les_moteurs_d_ia(appli, monkeypatch):
     monkeypatch.setattr(serveur.moteurs, "tuer_moteurs", lambda: tues.append(1))
     assert appli.post("/api/arreter", {})[0] == 200
     assert tues == [1]
+
+
+# ---------------------------------------------------------------- fermeture de la fenêtre (arrêt plus tôt)
+
+@pytest.fixture(autouse=True)
+def fenetre_ouverte():
+    """L'état de fermeture est global au module serveur : remis à zéro avant et après chaque test."""
+    serveur.ACTIVITE["fenetre_fermee"] = False
+    yield
+    serveur.ACTIVITE["fenetre_fermee"] = False
+
+
+def poster_brut(url, chemin, entetes):
+    """POST /api/fermeture avec exactement les en-têtes donnés (le Client en ajoute toujours)."""
+    req = urllib.request.Request(url + chemin, data=b"{}", method="POST", headers=entetes)
+    try:
+        with urllib.request.urlopen(req, timeout=5) as rep:
+            return rep.status
+    except urllib.error.HTTPError as e:
+        return e.code
+
+
+def test_fermeture_est_notee(appli):
+    assert appli.post("/api/fermeture", {}) == (200, {"ok": True})
+    assert serveur.ACTIVITE["fenetre_fermee"] is True
+
+
+@pytest.mark.parametrize("entetes", [
+    {"Content-Type": "application/json"},                                          # Origin absente
+    {"Origin": "http://evil.example", "Content-Type": "application/json"},         # Origin étrangère
+    {"Origin": "{url}", "Content-Type": "text/plain"},                             # pas du JSON
+], ids=["sans-origin", "origin-etrangere", "texte-brut"])
+def test_fermeture_refusee_sans_origine_ou_json(appli, entetes):
+    entetes = {k: v.format(url=appli.url) for k, v in entetes.items()}
+    assert poster_brut(appli.url, "/api/fermeture", entetes) == 403
+    assert serveur.ACTIVITE["fenetre_fermee"] is False
+
+
+def test_fermeture_repond_pendant_une_action_longue(appli):
+    with serveur.ETAT.verrou:
+        assert appli.post("/api/fermeture", {}) == (200, {"ok": True})
+    assert serveur.ACTIVITE["fenetre_fermee"] is True
+
+
+def test_delai_de_fermeture_par_variable(monkeypatch):
+    monkeypatch.delenv("PLANNING_PERMS_FERMETURE_S", raising=False)
+    assert serveur.delai_fermeture() == 90 == serveur.FERMETURE_DEFAUT_S
+    monkeypatch.setenv("PLANNING_PERMS_FERMETURE_S", "12.5")
+    assert serveur.delai_fermeture() == 12.5
+    for invalide in ("abc", "0", "-3", ""):
+        monkeypatch.setenv("PLANNING_PERMS_FERMETURE_S", invalide)
+        assert serveur.delai_fermeture() == 90, invalide
+
+
+def test_arret_seul_peu_apres_la_fermeture(environnement):
+    srv = lancer_serveur()
+    serveur.noter_activite()
+    serveur.surveiller(srv, 30, fermeture_s=0.5)
+    assert not srv.arrete.wait(1.5), "arrêt sans fermeture de la fenêtre"
+    srv.client = Client(f"http://127.0.0.1:{srv.server_address[1]}")
+    assert srv.client.post("/api/fermeture", {})[0] == 200
+    assert srv.arrete.wait(5), "le serveur ne s'est pas arrêté après la fermeture"
+    fermer_serveur(srv)
+
+
+@pytest.mark.parametrize("chemin", ["/api/etat", "/api/presence"])
+def test_une_requete_apres_la_fermeture_l_annule(environnement, chemin):
+    srv = lancer_serveur()
+    client = Client(f"http://127.0.0.1:{srv.server_address[1]}")
+    serveur.noter_activite()
+    serveur.surveiller(srv, 30, fermeture_s=1.0)
+    assert client.post("/api/fermeture", {})[0] == 200
+    time.sleep(0.5)
+    statut = client.get_json(chemin)[0] if chemin == "/api/etat" else client.post(chemin, {})[0]  # rechargement
+    assert statut == 200 and serveur.ACTIVITE["fenetre_fermee"] is False
+    assert not srv.arrete.wait(2.5), "l'arrêt court aurait dû être annulé"
+    srv.demander_arret()
+    fermer_serveur(srv)
+
+
+def test_pas_d_arret_pendant_un_travail_apres_la_fermeture(environnement):
+    srv = lancer_serveur()
+    client = Client(f"http://127.0.0.1:{srv.server_address[1]}")
+    serveur.noter_activite()
+    serveur.surveiller(srv, 30, fermeture_s=0.5)
+    with serveur.ETAT.verrou:  # une IA ou un calcul tourne
+        assert client.post("/api/fermeture", {})[0] == 200
+        time.sleep(1.5)
+        assert not srv.arrete.is_set()
+        assert serveur.ACTIVITE["fenetre_fermee"] is True
+    assert srv.arrete.wait(5), "le délai court doit s'appliquer à la fin du travail"
+    fermer_serveur(srv)
+
+
+def test_pas_d_arret_pendant_une_installation_apres_la_fermeture(environnement, monkeypatch):
+    srv = lancer_serveur()
+    serveur.noter_activite()
+    serveur.surveiller(srv, 30, fermeture_s=0.5)
+    travail = {"en_cours": True}
+    monkeypatch.setattr(assistants, "travail_en_cours", lambda: travail["en_cours"])
+    serveur.ACTIVITE["fenetre_fermee"] = True
+    time.sleep(1.5)
+    assert not srv.arrete.is_set()
+    travail["en_cours"] = False
+    assert srv.arrete.wait(5)
+    fermer_serveur(srv)

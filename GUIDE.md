@@ -25,7 +25,7 @@ Une icône **Planning des perms** apparaît sur le bureau et dans le menu Démar
 
 ## 4. Premier lancement : choisir l'assistant
 
-L'outil s'ouvre dans Chrome. Il demande d'abord : « Vous avez un abonnement Claude, ChatGPT, ou une clé DeepSeek ? »
+L'outil s'ouvre dans sa propre fenêtre, sans onglets ni barre d'adresse. Il demande d'abord : « Vous avez un abonnement Claude, ChatGPT, ou une clé DeepSeek ? »
 
 ![Question du premier lancement](guide/03-premier-lancement.png)
 
@@ -38,7 +38,7 @@ Pour Claude ou ChatGPT, l'outil installe l'assistant (quelques minutes), puis ou
 ![Connexion au compte](guide/04-connexion.png)
 
 1. Connectez-vous avec votre compte habituel, puis acceptez.
-2. Revenez dans l'onglet du planning : il passe seul à la suite.
+2. Revenez dans la fenêtre du planning : elle passe seule à la suite.
 3. Si la page de connexion affiche un code, copiez-le et collez-le dans le champ prévu de l'outil.
 
 Pour ChatGPT, une autre méthode existe si la page ne s'ouvre pas : un code à usage unique. Il faut d'abord l'autoriser dans les réglages de sécurité de ChatGPT ; l'outil explique où.
@@ -53,7 +53,7 @@ Collez le lien du sondage Framadate et suivez les cinq étapes jusqu'à l'Excel.
 
 - **Fermer** : bouton **Fermer l'outil** en haut de la page.
 - **Relancer** : icône **Planning des perms** sur le bureau.
-- Si vous fermez seulement l'onglet, l'outil s'arrête seul après quelques minutes.
+- Si vous fermez seulement la fenêtre, l'outil s'arrête seul après une minute et demie.
 
 ## En cas de souci
 

@@ -45,9 +45,12 @@ TYPES = {".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8",
 TAILLE_MAX = 2_000_000
 XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 INACTIVITE_DEFAUT_S = 600
+# Après la fermeture de la fenêtre : au-delà de la présence (une par minute) d'une autre fenêtre restée ouverte.
+FERMETURE_DEFAUT_S = 90
 # Requêtes qui n'attendent pas l'action en cours (une IA peut tenir le verrou plusieurs minutes).
 SANS_VERROU = frozenset({"/api/assistants/installer", "/api/assistants/connecter", "/api/assistants/code",
-                         "/api/assistants/annuler", "/api/presence", "/api/arreter"})
+                         "/api/assistants/annuler", "/api/presence", "/api/arreter",
+                         "/api/fermeture"})
 # Trop fréquentes pour le journal (une par minute, une par seconde pendant une installation).
 SANS_JOURNAL = frozenset({"/api/presence", "/api/assistants"})
 
@@ -78,11 +81,13 @@ class ErreurRequete(Exception):
 
 
 ETAT = Etat()
-ACTIVITE = {"derniere": time.monotonic()}
+ACTIVITE = {"derniere": time.monotonic(), "fenetre_fermee": False}
 
 
 def noter_activite():
+    """Toute requête : l'outil sert encore, et une fenêtre est donc encore ouverte."""
     ACTIVITE["derniere"] = time.monotonic()
+    ACTIVITE["fenetre_fermee"] = False
 
 
 # ---------------------------------------------------------------- actions
@@ -249,6 +254,13 @@ def action_presence(_corps):
     return {"ok": True}
 
 
+def action_fermeture(_corps):
+    """La page part (`pagehide`) : fenêtre fermée, mais aussi simple rechargement. L'arrêt seul vient donc
+    plus tôt (FERMETURE_DEFAUT_S), et toute requête suivante l'annule (noter_activite)."""
+    ACTIVITE["fenetre_fermee"] = True
+    return {"ok": True}
+
+
 def action_arreter(_corps):
     moteurs.tuer_moteurs()  # une IA en cours ne doit pas survivre à l'outil
     return {"ok": True}  # l'arrêt lui-même a lieu après l'envoi de la réponse (do_POST)
@@ -262,6 +274,7 @@ ACTIONS = {
     "/api/assistants/annuler": action_annuler,
     "/api/presence": action_presence,
     "/api/arreter": action_arreter,
+    "/api/fermeture": action_fermeture,
     "/api/sondage": action_sondage,
     "/api/regles/proposer": action_proposer,
     "/api/calculer": action_calculer,
@@ -428,17 +441,27 @@ def delai_inactivite() -> float:
     return delai if delai > 0 else INACTIVITE_DEFAUT_S
 
 
-def surveiller(serveur: ServeurLocal, delai_s: float) -> threading.Thread:
-    """Arrêt seul (V3-4) : aucune requête depuis `delai_s` secondes et aucun travail en cours
-    (action de l'application, IA comprise, installation ou connexion). Un travail en cours compte
-    comme une activité : le délai repart de zéro à sa fin."""
-    pas = max(0.1, min(5.0, delai_s / 4))
+def delai_fermeture() -> float:
+    try:
+        delai = float(os.environ.get("PLANNING_PERMS_FERMETURE_S") or FERMETURE_DEFAUT_S)
+    except ValueError:
+        return FERMETURE_DEFAUT_S
+    return delai if delai > 0 else FERMETURE_DEFAUT_S
+
+
+def surveiller(serveur: ServeurLocal, delai_s: float, fermeture_s: float | None = None) -> threading.Thread:
+    """Arrêt seul (V3-4) : aucune requête depuis `delai_s` secondes, ou depuis `fermeture_s` secondes après
+    la fermeture de la fenêtre, et aucun travail en cours (action de l'application, IA comprise, installation
+    ou connexion). Un travail en cours compte comme une activité : le délai repart de zéro à sa fin."""
+    fermeture_s = min(delai_s, fermeture_s or delai_fermeture())
+    pas = max(0.1, min(5.0, fermeture_s / 4))
 
     def boucle():
         while not serveur.arrete.wait(pas):
+            delai = fermeture_s if ACTIVITE["fenetre_fermee"] else delai_s
             if ETAT.verrou.locked() or assistants.travail_en_cours():
-                noter_activite()
-            elif time.monotonic() - ACTIVITE["derniere"] > delai_s:
+                ACTIVITE["derniere"] = time.monotonic()  # la fenêtre fermée reste notée pour la fin du travail
+            elif time.monotonic() - ACTIVITE["derniere"] > delai:
                 sys.stderr.write("Arrêt : aucune activité.\n")
                 serveur.demander_arret()
     fil = threading.Thread(target=boucle, daemon=True)

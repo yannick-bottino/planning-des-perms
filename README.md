@@ -9,7 +9,7 @@ L'outil de la Crèche Balustrade qui prépare le planning mensuel des perms pare
 1. Cliquez sur le bouton ci-dessus. Le fichier `Installer-Planning-des-perms.exe` se télécharge.
 2. Ouvrez-le. Windows affiche « Windows a protégé votre ordinateur » : cliquez sur **Informations complémentaires**, puis sur **Exécuter quand même**.
 3. Suivez les écrans. Aucun mot de passe administrateur n'est demandé.
-4. Une icône **Planning des perms** apparaît sur le bureau. Un clic dessus ouvre l'outil dans Chrome (ou dans votre navigateur habituel).
+4. Une icône **Planning des perms** apparaît sur le bureau. Un clic dessus ouvre l'outil dans sa propre fenêtre (Chrome, ou Edge si Chrome n'est pas installé).
 
 Le guide pas à pas, avec les écrans : [GUIDE.md](GUIDE.md).
 

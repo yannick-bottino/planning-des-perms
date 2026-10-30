@@ -3,7 +3,7 @@
 Bibliothèque standard seulement, et aucun import de serveur, moteurs ou parcours en tête de module :
 le premier démarrage à froid prend 15 à 20 secondes (ortools charge pandas), et l'utilisatrice ne doit
 ni rester devant un écran vide, ni lancer l'outil deux fois. Ordre :
-1. l'outil répond déjà : on ouvre le navigateur dessus ;
+1. l'outil répond déjà : on ouvre une fenêtre dessus ;
 2. un autre lanceur démarre l'outil (verrou unique) : on ouvre la page d'attente sur son port ;
 3. sinon : port choisi, journal ouvert, page d'attente ouverte tout de suite, puis chargement du serveur.
 """
@@ -67,23 +67,41 @@ def chemins_chrome() -> list[Path]:
                                               os.environ.get("LOCALAPPDATA")) if base]
 
 
+def chemins_edge() -> list[Path]:
+    """Emplacements standard d'Edge, présent sur tout Windows 10 et 11."""
+    relatif = Path("Microsoft") / "Edge" / "Application" / "msedge.exe"
+    return [Path(base) / relatif for base in (os.environ.get("ProgramFiles(x86)"),
+                                              os.environ.get("ProgramFiles"),
+                                              os.environ.get("LOCALAPPDATA")) if base]
+
+
 def trouver_chrome() -> str | None:
     return next((str(c) for c in chemins_chrome() if c.is_file()), None)
 
 
+def trouver_navigateurs() -> list[str]:
+    """Navigateurs capables du mode application, dans l'ordre d'essai : Chrome, puis Edge."""
+    edge = next((str(c) for c in chemins_edge() if c.is_file()), None)
+    return [n for n in (trouver_chrome(), edge) if n]
+
+
+def commande_fenetre(navigateur: str, adresse: str) -> list[str]:
+    """Mode application : une fenêtre à part, sans onglets ni barre d'adresse."""
+    return [navigateur, f"--app={adresse}"]
+
+
 def ouvrir_navigateur(adresse: str) -> None:
-    """Chrome s'il est installé, sinon le navigateur par défaut. Pour les tests, PLANNING_PERMS_NAVIGATEUR
-    (liste JSON) remplace le navigateur : la commande reçoit l'adresse en dernier argument."""
+    """Fenêtre d'application de Chrome, sinon d'Edge, sinon un onglet du navigateur par défaut. Pour les tests,
+    PLANNING_PERMS_NAVIGATEUR (liste JSON) remplace le navigateur : la commande reçoit l'adresse en dernier argument."""
     imposee = os.environ.get("PLANNING_PERMS_NAVIGATEUR")
     if imposee:
         subprocess.Popen([*json.loads(imposee), adresse], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                          stderr=subprocess.DEVNULL)
         return
-    chrome = trouver_chrome() if sys.platform == "win32" else None
-    if chrome:
+    for navigateur in trouver_navigateurs() if sys.platform == "win32" else []:
         try:
-            subprocess.Popen([chrome, adresse], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                             stderr=subprocess.DEVNULL)
+            subprocess.Popen(commande_fenetre(navigateur, adresse), stdin=subprocess.DEVNULL,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             return
         except OSError:
             pass
@@ -189,7 +207,7 @@ def main() -> int:
     rediriger_sans_console()
     if navigateur_autorise():
         ouvrir_navigateur(adresse_attente(port))
-    os.environ["PLANNING_PERMS_SANS_NAVIGATEUR"] = "1"  # la page d'attente ouvre l'outil : pas d'autre onglet
+    os.environ["PLANNING_PERMS_SANS_NAVIGATEUR"] = "1"  # la page d'attente ouvre l'outil : pas d'autre fenêtre
     try:
         time.sleep(float(os.environ.get("PLANNING_PERMS_DEMARRAGE_LENT_S") or 0))  # essais : démarrage lent
         sys.path.insert(0, str(Path(__file__).resolve().parent))
