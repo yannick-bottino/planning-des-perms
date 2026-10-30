@@ -1,0 +1,56 @@
+PLANNING DES PERMANENCES : MODE D'EMPLOI
+=========================================
+
+Sur un PC Windows
+-----------------
+1. Décompressez le fichier zip : clic droit sur le zip, puis « Extraire tout ».
+2. Dans le dossier extrait, double-cliquez sur « lancer.bat ».
+   Une fenêtre noire s'ouvre, puis votre navigateur affiche l'application.
+3. Suivez les cinq étapes à l'écran, du lien du sondage jusqu'au fichier Excel.
+
+Pour arrêter l'application, cliquez sur « Fermer l'outil » en haut de la page.
+Si vous fermez seulement l'onglet, l'outil s'arrête tout seul au bout de dix minutes.
+La fenêtre noire reste ouverte pendant que l'outil tourne : ne la fermez pas avant.
+
+La première fois, l'application installe un outil nommé « uv » et prépare ses
+composants. Cela prend une à deux minutes et demande une connexion internet.
+Aucun droit administrateur n'est nécessaire. Les fois suivantes, le démarrage
+prend quelques secondes.
+
+Sur un Mac
+----------
+1. Décompressez le fichier zip (double-clic).
+2. Ouvrez l'application Terminal, tapez « sh » suivi d'un espace, glissez le
+   fichier « lancer.sh » dans la fenêtre, puis appuyez sur Entrée.
+
+Qui lit les commentaires du sondage ?
+-------------------------------------
+- Claude (abonnement Pro, Max, Team ou Enterprise) ou ChatGPT (abonnement Plus ou
+  supérieur). Au premier lancement, la page demande lequel vous avez, installe
+  l'assistant sur Windows si besoin, puis ouvre la page de connexion dans votre
+  navigateur. Le bouton « Changer d'assistant » de l'étape 1 permet d'y revenir.
+- DeepSeek, un service en ligne peu coûteux : créez une clé sur
+  https://platform.deepseek.com, puis collez-la dans l'application. La clé reste
+  sur votre ordinateur.
+- Personne : vous saisissez les règles vous-même dans le tableau.
+
+Dans tous les cas, vous relisez les règles avant le calcul.
+
+Où sont les fichiers ?
+----------------------
+Dans le dossier « balustrade-planning » de votre dossier personnel, un
+sous-dossier par mois (par exemple 2026-11). Le bouton « Ouvrir le dossier » de
+la dernière étape l'ouvre directement. Ces fichiers contiennent les prénoms des
+enfants : ne les partagez pas en dehors de la crèche.
+
+En cas de problème
+------------------
+- Windows affiche « Windows a protégé votre ordinateur » : cliquez sur
+  « Informations complémentaires », puis « Exécuter quand même ». Pour éviter ce
+  message, avant de décompresser : clic droit sur le zip, Propriétés, cochez
+  « Débloquer », puis OK.
+- L'installation de uv échoue (antivirus, réseau d'entreprise) : installez uv à
+  la main en suivant https://docs.astral.sh/uv/getting-started/installation/
+  puis relancez lancer.bat.
+- La page ne s'ouvre pas : copiez l'adresse affichée dans la fenêtre noire
+  (http://127.0.0.1:...) dans votre navigateur.

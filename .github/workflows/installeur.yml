@@ -1,0 +1,149 @@
+# Workflow du DÉPÔT PUBLIC. À copier dans .github/workflows/installeur.yml de ce dépôt.
+# Dans le dépôt public, l'outil est à la racine (app/, scripts/, tests/, installeur/, requirements.txt),
+# et non sous skills/planning-perms/ comme dans le dépôt privé : les chemins ci-dessous en tiennent compte.
+# Toutes les actions sont épinglées par SHA de commit (version en commentaire).
+name: Installeur Windows
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  construire:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    outputs:
+      sha256: ${{ steps.hash.outputs.sha256 }}
+    env:
+      PYTHONIOENCODING: utf-8
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+
+      - name: Version (l'étiquette doit correspondre à installeur/VERSION)
+        id: version
+        shell: bash
+        run: |
+          numero="$(tr -d '\r\n ' < installeur/VERSION)"
+          if [[ "$GITHUB_REF_TYPE" == "tag" && "$GITHUB_REF_NAME" != "v$numero" ]]; then
+            echo "::error::L'étiquette $GITHUB_REF_NAME ne correspond pas à installeur/VERSION ($numero)"
+            exit 1
+          fi
+          echo "numero=$numero" >> "$GITHUB_OUTPUT"
+
+      - name: Tests (sans navigateur, sans lancement réel)
+        shell: bash
+        # Dépendances de l'outil : requirements.txt (mêmes versions que le bloc PEP 723 de app/serveur.py).
+        run: uv run --python 3.12 --with-requirements requirements.txt --with pytest --with pandas python -m pytest tests -m "not e2e and not lancement and not reel"
+
+      - name: Inno Setup (version 6.3 ou plus)
+        shell: pwsh
+        run: |
+          $iscc = Get-Command ISCC.exe -ErrorAction SilentlyContinue
+          $chemin = if ($iscc) { $iscc.Source } else { "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
+          if (-not (Test-Path $chemin)) {
+            choco install innosetup -y --no-progress
+            $chemin = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          }
+          $v = [version](Get-Item $chemin).VersionInfo.ProductVersion
+          Write-Host "ISCC $v ($chemin)"
+          if ($v -lt [version]"6.3.0") { throw "Inno Setup $v trop ancien (6.3 minimum)" }
+          "ISCC=$chemin" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Construire l'installeur
+        shell: bash
+        run: uv run --python 3.12 python installeur/construire.py --version "${{ steps.version.outputs.numero }}"
+
+      - name: Test d'installation silencieuse
+        shell: pwsh
+        run: |
+          $exe = Resolve-Path "installeur/build/Installer-Planning-des-perms.exe"
+          $dir = Join-Path $env:RUNNER_TEMP "pp-install"
+          $p = Start-Process $exe -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/CURRENTUSER","/DIR=$dir" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "Installation : code $($p.ExitCode)" }
+          foreach ($f in "python\pythonw.exe","python\python.exe","planning-perms\app\demarrer.py","unins000.exe") {
+            if (-not (Test-Path (Join-Path $dir $f))) { throw "Fichier manquant : $f" }
+          }
+          $port = 48765
+          $env:PLANNING_PERMS_SANS_NAVIGATEUR = "1"
+          $env:PLANNING_PERMS_PORT = "$port"
+          $srv = Start-Process (Join-Path $dir "python\pythonw.exe") -ArgumentList "`"$dir\planning-perms\app\demarrer.py`"" `
+                   -WorkingDirectory (Join-Path $dir "planning-perms") -PassThru
+          try {
+            $ok = $false
+            for ($i = 0; $i -lt 90 -and -not $ok; $i++) {
+              Start-Sleep -Seconds 1
+              try { $ok = (Invoke-WebRequest "http://127.0.0.1:$port/api/etat" -UseBasicParsing -TimeoutSec 2).StatusCode -eq 200 } catch {}
+            }
+            if (-not $ok) { throw "Le serveur ne répond pas sur /api/etat" }
+            Write-Host "Serveur installé : réponse correcte sur /api/etat"
+            try {
+              Invoke-WebRequest "http://127.0.0.1:$port/api/arreter" -Method Post -Body "{}" -ContentType "application/json" `
+                -Headers @{ Origin = "http://127.0.0.1:$port" } -UseBasicParsing -TimeoutSec 5 | Out-Null
+              $srv.WaitForExit(15000) | Out-Null
+            } catch { Write-Host "Arrêt par l'API impossible : $($_.Exception.Message)" }
+          } finally {
+            Stop-Process -Id $srv.Id -Force -ErrorAction SilentlyContinue
+          }
+          Start-Process (Join-Path $dir "unins000.exe") -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART" -Wait
+          for ($i = 0; $i -lt 60 -and (Test-Path $dir); $i++) { Start-Sleep -Seconds 1 }
+          if (Test-Path $dir) { throw "Le dossier d'installation existe encore après désinstallation" }
+
+      - name: Empreinte SHA-256
+        id: hash
+        shell: pwsh
+        run: |
+          $f = "installeur/build/Installer-Planning-des-perms.exe"
+          $h = (Get-FileHash $f -Algorithm SHA256).Hash.ToLower()
+          "$h  Installer-Planning-des-perms.exe" | Out-File "$f.sha256" -Encoding ascii
+          "sha256=$h" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: installeur
+          path: |
+            installeur/build/Installer-Planning-des-perms.exe
+            installeur/build/Installer-Planning-des-perms.exe.sha256
+          if-no-files-found: error
+
+  publier:
+    if: github.ref_type == 'tag'
+    needs: construire
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: installeur
+          path: dist
+      - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        with:
+          files: |
+            dist/Installer-Planning-des-perms.exe
+            dist/Installer-Planning-des-perms.exe.sha256
+          generate_release_notes: false
+          body: |
+            ## Planning des perms ${{ github.ref_name }}
+
+            Installeur Windows : double-cliquer sur `Installer-Planning-des-perms.exe`, puis suivre les écrans. Aucun droit administrateur n'est nécessaire.
+
+            ### Avertissement de Windows (SmartScreen)
+
+            L'installeur n'est pas signé, donc Windows affiche « Windows a protégé votre ordinateur ». Deux clics suffisent :
+            1. Cliquer sur **Informations complémentaires**.
+            2. Cliquer sur **Exécuter quand même**.
+
+            ### Vérification (facultative)
+
+            Empreinte SHA-256 du fichier : `${{ needs.construire.outputs.sha256 }}`
+            Commande PowerShell : `Get-FileHash .\Installer-Planning-des-perms.exe -Algorithm SHA256`
+
+            ### Désinstallation
+
+            Paramètres Windows, Applications, « Planning des perms ». Vos plannings (dossier `balustrade-planning`) sont conservés.

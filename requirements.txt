@@ -1,0 +1,7 @@
+# Étape 1 (fetch_framadate.py, planning_core.py) : bibliothèque standard uniquement.
+# Étape 2 (solve.py) : ortools (CP-SAT, version épinglée pour un résultat reproductible) et pyyaml.
+# Étape 3 (export_xlsx.py) : openpyxl.
+# Dépendances de test : pytest, pandas (test de compatibilité avec perm-creche-balustrade)
+ortools==9.15.6755
+pyyaml>=6
+openpyxl>=3.1

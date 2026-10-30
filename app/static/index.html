@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Planning des permanences</title>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<a class="evitement" href="#contenu">Aller au contenu</a>
+<header class="bandeau">
+  <div class="bandeau-int">
+    <p class="marque">Crèche Balustrade <span aria-hidden="true">·</span> <strong>Planning des permanences</strong></p>
+    <p class="mois" id="mois" hidden></p>
+    <button type="button" class="btn fermer" id="fermer">Fermer l'outil</button>
+  </div>
+  <nav aria-label="Étapes">
+    <ol class="etapes" id="etapes">
+      <li><button type="button" data-etape="1"><span class="num">1</span> <span class="lib">Sondage</span></button></li>
+      <li><button type="button" data-etape="2"><span class="num">2</span> <span class="lib">Résumé</span></button></li>
+      <li><button type="button" data-etape="3"><span class="num">3</span> <span class="lib">Règles</span></button></li>
+      <li><button type="button" data-etape="4"><span class="num">4</span> <span class="lib">Arbitrage</span></button></li>
+      <li><button type="button" data-etape="5"><span class="num">5</span> <span class="lib">Excel</span></button></li>
+    </ol>
+  </nav>
+</header>
+
+<p id="banniere-arret" class="banniere" role="alert" hidden></p>
+<main id="contenu" tabindex="-1">
+  <p id="annonce" class="annonce" role="status" aria-live="polite"></p>
+  <div id="vue"></div>
+</main>
+
+<footer class="pied">
+  <p>L'outil tourne sur cet ordinateur. Pour l'arrêter, cliquez sur « Fermer l'outil » en haut de la page.</p>
+</footer>
+<script src="/static/app.js"></script>
+</body>
+</html>

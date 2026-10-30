@@ -1,0 +1,829 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arbitrage du planning</title>
+<style>
+:root {
+  color-scheme: light dark;
+  /* Neutres légèrement teintés vers l'accent (bleu ardoise), jamais crème. */
+  --fond: oklch(0.972 0.005 255); --surface: oklch(1 0 0); --panneau: oklch(0.985 0.004 255);
+  --encre: oklch(0.25 0.018 255); --doux: oklch(0.46 0.018 255); --bord: oklch(0.885 0.01 255); --bord-fort: oklch(0.78 0.014 255);
+  --accent: oklch(0.49 0.15 258); --accent-texte: oklch(0.99 0 0); --accent-fond: oklch(0.95 0.025 258);
+  --rouge: oklch(0.5 0.19 27); --rouge-fond: oklch(0.955 0.03 27);
+  --orange: oklch(0.5 0.125 58); --orange-fond: oklch(0.96 0.045 75);
+  --jaune: oklch(0.46 0.09 95); --jaune-fond: oklch(0.965 0.06 100);
+  --gris: oklch(0.47 0.015 255); --gris-fond: oklch(0.94 0.006 255);
+  --ok: oklch(0.47 0.12 152); --ok-fond: oklch(0.955 0.035 152);
+  --ferme: oklch(0.93 0.006 255); --focus: oklch(0.55 0.2 258);
+  --t-xs: 12.5px; --t-s: 13.5px; --t-m: 15px; --t-l: 17px; --t-xl: 21px;
+  --e-1: 4px; --e-2: 8px; --e-3: 12px; --e-4: 16px; --e-5: 24px;
+  --rayon: 7px; --rayon-s: 5px;
+  --z-collant: 10;
+  --duree: 160ms; --courbe: cubic-bezier(0.25, 1, 0.5, 1);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fond: oklch(0.185 0.012 255); --surface: oklch(0.232 0.014 255); --panneau: oklch(0.212 0.013 255);
+    --encre: oklch(0.94 0.006 255); --doux: oklch(0.75 0.015 255); --bord: oklch(0.34 0.016 255); --bord-fort: oklch(0.45 0.018 255);
+    --accent: oklch(0.75 0.12 258); --accent-texte: oklch(0.18 0.03 258); --accent-fond: oklch(0.3 0.06 258);
+    --rouge: oklch(0.8 0.12 27); --rouge-fond: oklch(0.3 0.07 27);
+    --orange: oklch(0.83 0.11 70); --orange-fond: oklch(0.31 0.055 65);
+    --jaune: oklch(0.88 0.11 98); --jaune-fond: oklch(0.31 0.05 98);
+    --gris: oklch(0.76 0.015 255); --gris-fond: oklch(0.29 0.014 255);
+    --ok: oklch(0.8 0.13 152); --ok-fond: oklch(0.29 0.05 152);
+    --ferme: oklch(0.21 0.01 255); --focus: oklch(0.78 0.14 258);
+    }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--fond); color: var(--encre);
+  font: var(--t-m)/1.45 system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; cursor: pointer; }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+h1 { font-size: var(--t-xl); font-weight: 650; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+h2 { font-size: var(--t-m); font-weight: 650; margin: 0 0 var(--e-2); }
+h3 { font-size: var(--t-xs); font-weight: 650; margin: var(--e-4) 0 var(--e-1); color: var(--doux); }
+
+/* En-tête */
+header { display: flex; flex-wrap: wrap; gap: var(--e-3) var(--e-5); align-items: center; justify-content: space-between;
+  padding: var(--e-4) var(--e-5); background: var(--surface); border-bottom: 1px solid var(--bord); }
+.resume { display: flex; flex-wrap: wrap; gap: var(--e-2); margin-top: var(--e-2); }
+.puce { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px;
+  font-size: var(--t-s); font-weight: 550; background: var(--gris-fond); color: var(--gris); }
+.puce::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.puce.rouge { background: var(--rouge-fond); color: var(--rouge); }
+.puce.orange { background: var(--orange-fond); color: var(--orange); }
+.puce.jaune { background: var(--jaune-fond); color: var(--jaune); }
+.puce.ok { background: var(--ok-fond); color: var(--ok); }
+.actions { display: flex; gap: var(--e-2); flex-wrap: wrap; }
+.btn { padding: 7px 14px; border-radius: var(--rayon-s); border: 1px solid var(--bord-fort); background: var(--surface);
+  font-weight: 550; transition: background-color var(--duree) var(--courbe), border-color var(--duree) var(--courbe); }
+.btn:hover:not(:disabled) { background: var(--gris-fond); }
+.btn:active:not(:disabled) { transform: translateY(1px); }
+.btn:disabled { color: var(--doux); border-color: var(--bord); background: transparent; cursor: default; }
+.btn.primaire { background: var(--accent); color: var(--accent-texte); border-color: var(--accent); }
+.btn.primaire:hover { background: color-mix(in oklch, var(--accent) 88%, var(--encre)); }
+.btn.petit { padding: 3px 10px; font-size: var(--t-s); }
+.btn.risque { color: var(--rouge); border-color: var(--rouge); }
+
+#statut { margin: 0; padding: var(--e-2) var(--e-5); min-height: 2.4em; font-size: var(--t-s); color: var(--doux); }
+#statut.avert { background: var(--rouge-fond); color: var(--rouge); font-weight: 600; }
+
+/* Mise en page */
+main { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: var(--e-5); padding: 0 var(--e-5) var(--e-5); align-items: start; }
+#grille-zone { min-width: 0; }
+
+/* Grille du mois */
+table.grille { border-collapse: separate; border-spacing: 6px 0; width: 100%; table-layout: fixed; margin-left: -6px; }
+table.grille thead th { font-weight: 600; font-size: var(--t-s); color: var(--doux); text-align: left; padding: 0 2px var(--e-1); }
+th.sem { width: 76px; vertical-align: top; padding: 26px 0 0; text-align: left; font-size: var(--t-s); font-weight: 650; line-height: 1.25; }
+th.sem span { display: block; font-weight: 450; color: var(--doux); }
+td.jour { vertical-align: top; padding: 0 0 var(--e-4); }
+.date-jour { font-size: var(--t-xs); color: var(--doux); margin: 0 0 var(--e-1) 2px; font-weight: 550; }
+.case { display: flex; flex-direction: column; gap: var(--e-1); width: 100%; min-height: 5.1rem; margin: 0 0 6px; padding: 6px 8px;
+  text-align: left; background: var(--surface); border: 1px solid var(--bord); border-radius: var(--rayon);
+  transition: border-color var(--duree) var(--courbe), background-color var(--duree) var(--courbe); }
+.case:hover { border-color: var(--accent); }
+.case.rouge { background: var(--rouge-fond); border-color: var(--rouge); }
+.case.orange { background: var(--orange-fond); border-color: var(--orange); }
+.case.selection { border-color: var(--accent); background: var(--accent-fond); box-shadow: 0 0 0 2px var(--accent); }
+.case.rouge.selection { background: var(--rouge-fond); }
+.case.orange.selection { background: var(--orange-fond); }
+.case.ferme { justify-content: center; align-items: center; background: transparent; color: var(--doux); border: 1px dashed var(--bord);
+  box-shadow: none; cursor: default; font-size: var(--t-xs); text-align: center; }
+.case-tete { display: flex; justify-content: space-between; align-items: center; gap: var(--e-1); font-size: var(--t-xs); color: var(--doux); }
+.case-tete .nb { display: inline-flex; align-items: center; gap: var(--e-1); font-weight: 600; color: var(--encre); }
+.badge { display: inline-block; font-size: 11.5px; font-weight: 700; padding: 0 5px; border-radius: 4px; line-height: 1.5; }
+.rouge .badge { background: var(--rouge); color: var(--surface); }
+.orange .badge { background: var(--orange); color: var(--surface); }
+.etiqs { display: flex; flex-wrap: wrap; gap: 4px; }
+.etiq { font-size: var(--t-xs); line-height: 1.5; padding: 0 6px; border-radius: 4px; background: var(--gris-fond);
+  border: 1px solid transparent; font-weight: 600; letter-spacing: 0.01em; white-space: nowrap; }
+.etiq.sib { background: transparent; border: 1px dashed var(--bord-fort); color: var(--gris); font-weight: 500; }
+
+/* Légende */
+.legende { display: flex; flex-wrap: wrap; gap: var(--e-2) var(--e-4); margin: 0; padding: var(--e-3) 0 0; border-top: 1px solid var(--bord);
+  font-size: var(--t-xs); color: var(--doux); list-style: none; }
+.legende li { display: inline-flex; align-items: center; gap: 6px; }
+.legende .ech { display: inline-block; width: 22px; height: 14px; border-radius: 4px; border: 1px solid var(--bord); background: var(--surface); }
+.legende .ech.rouge { background: var(--rouge-fond); border-color: var(--rouge); }
+.legende .ech.orange { background: var(--orange-fond); border-color: var(--orange); }
+.legende .ech.sib { background: transparent; border: 1px dashed var(--bord-fort); }
+.legende .ech.ferme { background: transparent; border: 1px dashed var(--bord-fort); }
+
+/* Panneau latéral */
+aside { display: flex; flex-direction: column; gap: var(--e-3); position: sticky; top: 0; max-height: 100vh; overflow-y: auto;
+  padding: var(--e-4) 2px var(--e-4) 0; z-index: var(--z-collant); overscroll-behavior: contain; }
+section.bloc { background: var(--panneau); border: 1px solid var(--bord); border-radius: var(--rayon); padding: var(--e-4); }
+section.bloc#detail { background: var(--surface); }
+section.bloc.jaune { background: var(--jaune-fond); border-color: color-mix(in oklch, var(--jaune) 30%, var(--jaune-fond)); color: var(--jaune); }
+section.bloc.jaune h2 { color: var(--encre); }
+ul.liste { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+ul.liste li { padding: 6px 0; border-bottom: 1px solid var(--bord); font-size: var(--t-s); }
+ul.liste li:last-child { border-bottom: 0; }
+.alerte-btn { display: flex; gap: var(--e-2); align-items: baseline; width: 100%; text-align: left; background: none; border: 0; padding: 2px 0; border-radius: 4px; }
+.alerte-btn:hover { color: var(--accent); }
+.code { flex: none; display: inline-block; min-width: 2.4em; text-align: center; font-size: 11.5px; font-weight: 700; padding: 0 4px; border-radius: 4px; }
+.code.rouge { background: var(--rouge-fond); color: var(--rouge); }
+.code.orange { background: var(--orange-fond); color: var(--orange); }
+.code.jaune { background: var(--jaune-fond); color: var(--jaune); }
+.code.gris { background: var(--gris-fond); color: var(--gris); }
+.doux { color: var(--doux); font-size: var(--t-s); margin: 0; }
+.bien { color: var(--ok); font-size: var(--t-s); font-weight: 550; margin: 0; }
+.avert-ligne { display: block; color: var(--rouge); font-weight: 600; font-size: var(--t-xs); margin-top: 2px; }
+
+/* Détail d'une case */
+.detail-meta { margin: 0 0 var(--e-1); color: var(--doux); font-size: var(--t-s); }
+.cand { display: flex; justify-content: space-between; align-items: center; gap: var(--e-2); padding: var(--e-2) 0; border-bottom: 1px solid var(--bord); }
+.cand:last-of-type { border-bottom: 0; }
+.cand .qui { font-weight: 650; }
+.dispo { display: inline-block; margin-left: 6px; font-size: 11.5px; font-weight: 600; padding: 0 6px; border-radius: 999px; vertical-align: 1px; }
+.dispo.oui { background: var(--ok-fond); color: var(--ok); }
+.dispo.sib { background: var(--gris-fond); color: var(--gris); }
+.dispo.non { background: var(--rouge-fond); color: var(--rouge); }
+.compteurs { display: block; margin-top: 2px; color: var(--doux); font-size: var(--t-xs); }
+.compteurs b { color: var(--encre); font-weight: 600; }
+label.opt { display: flex; gap: var(--e-2); align-items: center; margin: var(--e-3) 0 0; font-size: var(--t-s); color: var(--doux); cursor: pointer; }
+label.opt input { width: 16px; height: 16px; accent-color: var(--accent); }
+
+/* Tableau des familles */
+table.fam { width: 100%; border-collapse: collapse; font-size: var(--t-s); }
+table.fam th { text-align: left; font-size: var(--t-xs); font-weight: 600; color: var(--doux); padding: 0 4px var(--e-1); border-bottom: 1px solid var(--bord-fort); }
+table.fam td { padding: 4px; border-bottom: 1px solid var(--bord); }
+table.fam th.s, table.fam td.s { text-align: center; width: 2.6em; padding-inline: 0; }
+table.fam td.s.zero { color: var(--doux); }
+table.fam td.s.deux { font-weight: 700; color: var(--accent); }
+table.fam td.s.trop { font-weight: 700; color: var(--rouge); }
+table.fam tr.ecart td.tot { color: var(--orange); font-weight: 700; }
+table.fam tr.depasse td.tot { color: var(--rouge); font-weight: 700; }
+table.fam tr.choisie td { background: var(--accent-fond); }
+table.fam td.nom { font-weight: 600; }
+
+/* Commentaires */
+.comm { border-top: 1px solid var(--bord); padding: var(--e-3) 0 var(--e-2); }
+.comm:first-of-type { border-top: 0; padding-top: 0; }
+.comm .qui { font-weight: 650; font-size: var(--t-s); }
+.comm .qui span { font-weight: 450; color: var(--doux); }
+.comm p { margin: 2px 0 0; font-size: var(--t-s); white-space: pre-wrap; overflow-wrap: anywhere; max-width: 70ch; }
+
+/* Marque, constat et jauge de couverture */
+.marque { display: flex; align-items: center; gap: var(--e-2); margin: 0 0 var(--e-2); font-size: var(--t-s); font-weight: 650; }
+.marque svg { fill: var(--accent); flex: none; }
+.marque span { font-weight: 450; color: var(--doux); }
+.constat { margin: 2px 0 0; font-size: var(--t-m); color: var(--encre); }
+.constat.alerte { color: var(--rouge); font-weight: 600; }
+@media (max-width: 760px) {
+  header, #statut { padding-inline: var(--e-4); }
+  main { padding-inline: var(--e-4); }
+  #grille-zone { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table.grille { min-width: 680px; }
+}
+.jauge { display: flex; gap: 3px; margin-top: auto; padding-top: 2px; }
+.jauge i { flex: 1; height: 4px; border-radius: 2px; background: var(--bord); }
+.jauge i.plein { background: var(--accent); }
+.jauge i.trop { background: var(--orange); }
+.case.rouge .jauge i { background: color-mix(in oklch, var(--rouge) 35%, transparent); }
+
+@media (max-width: 1100px) {
+  main { grid-template-columns: minmax(0, 1fr); }
+  aside { position: static; max-height: none; overflow: visible; padding: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; }
+}
+@media print { aside, header .actions, #statut, .legende { display: none; } main { display: block; } }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <p class="marque"><svg width="22" height="18" viewBox="0 0 22 18" aria-hidden="true" focusable="false">
+      <rect x="0" y="0" width="22" height="3" rx="1"/><rect x="0" y="15" width="22" height="3" rx="1"/>
+      <rect x="2" y="3" width="3" height="12"/><rect x="9.5" y="3" width="3" height="12"/><rect x="17" y="3" width="3" height="12"/>
+    </svg>Crèche Balustrade <span>· planning des perms</span></p>
+    <h1 id="titre">Arbitrage du planning</h1>
+    <p class="constat" id="constat"></p>
+    <div class="resume" id="resume" aria-label="Résumé"></div>
+  </div>
+  <div class="actions">
+    <button class="btn" id="btn-annuler" data-testid="entete-annuler" type="button">Annuler le dernier changement</button>
+    <button class="btn" id="btn-reset" data-testid="entete-repartir" type="button">Repartir du planning calculé</button>
+    <button class="btn primaire" id="btn-export" data-testid="entete-exporter" type="button">Exporter mes choix</button>
+  </div>
+</header>
+<p id="statut" role="status" aria-live="polite">Cliquez sur une case pour voir les familles qui peuvent venir.</p>
+<main>
+  <div>
+    <div id="grille-zone"></div>
+    <ul class="legende" aria-label="Légende">
+      <li><b>2/2</b> : parents sur le maximum prévu</li>
+      <li><span class="ech rouge" aria-hidden="true"></span>« ! Vide » ou « ! Règle » : à trancher</li>
+      <li><span class="ech orange" aria-hidden="true"></span>« ▲ Trop » : plus de parents que prévu</li>
+      <li><span class="ech sib" aria-hidden="true"></span>Famille en pointillés : a répondu « si besoin »</li>
+      <li><span class="ech ferme" aria-hidden="true"></span>Crèche fermée</li>
+    </ul>
+  </div>
+  <aside>
+    <section class="bloc" id="detail" aria-label="Case sélectionnée"></section>
+    <section class="bloc jaune" id="non-traduits" aria-label="Commentaires à traiter à la main" hidden></section>
+    <section class="bloc" id="alertes" aria-label="Alertes"></section>
+    <section class="bloc" id="familles" aria-label="Familles"></section>
+    <section class="bloc" id="commentaires" aria-label="Commentaires du sondage"></section>
+    <section class="bloc" id="histo" aria-label="Historique des changements"></section>
+  </aside>
+</main>
+
+<script type="application/json" id="donnees">__DONNEES__</script>
+
+<script>
+/* CORE:BEGIN */
+// Calculs purs, sans DOM. Mêmes règles que `evaluer` dans solve.py (D1 à D4, A1, A2, A3, A6).
+// La vérité finale reste Python : cette page est une aide.
+const GRAVITE = { A1: "rouge", A2: "orange", A3: "orange", A4: "jaune", A6: "gris", D: "rouge" };
+const UTILISABLES = { oui: true, si_besoin: true };
+
+function cle(famille, creneau) { return famille + "|" + creneau; }
+
+function decouper(k) {
+  const i = k.indexOf("|");
+  return { famille: k.slice(0, i), creneau: k.slice(i + 1) };
+}
+
+function indexCreneaux(D) {
+  const m = {};
+  D.planning.creneaux.forEach((c) => { m[c.id] = c; });
+  return m;
+}
+
+function nouvelleAlerte(code, message, creneaux, famille, regle) {
+  const liste = creneaux || [];
+  return { code, gravite: GRAVITE[code], message, creneau: liste.length ? liste[0] : null,
+           creneaux: liste, famille: famille || null, regle: regle || null };
+}
+
+function dispoDe(D, famille, creneau) { return (D.dispos[famille] || {})[creneau] || "non"; }
+
+function violationsDures(D, valides, CR) {
+  const alertes = [];
+  const parJour = {}, parSemaine = {};
+  valides.slice().sort((a, b) => cle(a.famille, a.creneau) < cle(b.famille, b.creneau) ? -1 : 1)
+    .forEach(({ famille: f, creneau: c }) => {
+      const cr = CR[c], lib = D.libelles[c];
+      if (!UTILISABLES[dispoDe(D, f, c)]) {
+        alertes.push(nouvelleAlerte("D", "La famille " + f + " est affectée sur " + lib +
+          " alors qu'elle n'est pas disponible", [c], f, "D3"));
+      }
+      if ((D.absences[f] || []).indexOf(cr.semaine) >= 0) {
+        alertes.push(nouvelleAlerte("D", "La famille " + f + " est affectée sur " + lib +
+          ", pendant sa semaine d'absence", [c], f, "D4"));
+      }
+      (parJour[f + "|" + cr.date] = parJour[f + "|" + cr.date] || []).push(c);
+      (parSemaine[f + "|" + cr.semaine] = parSemaine[f + "|" + cr.semaine] || []).push(c);
+    });
+  Object.keys(parJour).sort().forEach((k) => {
+    const ids = parJour[k];
+    if (ids.length > 1) {
+      const f = k.split("|")[0], jour = k.split("|")[1];
+      alertes.push(nouvelleAlerte("D", "La famille " + f + " a " + ids.length +
+        " perms le même jour (" + D.libelles_jours[jour] + ")", ids, f, "D1"));
+    }
+  });
+  Object.keys(parSemaine).sort().forEach((k) => {
+    const ids = parSemaine[k];
+    if (ids.length > D.plafond_hebdo) {
+      const f = k.split("|")[0], sem = k.split("|")[1];
+      alertes.push(nouvelleAlerte("D", "La famille " + f + " a " + ids.length + " perms la " +
+        D.libelles_semaines[sem] + " (maximum " + D.plafond_hebdo + ")", ids, f, "D2"));
+    }
+  });
+  return alertes;
+}
+
+// cles : tableau de "FAMILLE|creneau". Renvoie parents, totaux, parSemaine, alertes.
+function calculer(D, cles) {
+  const CR = indexCreneaux(D);
+  const alertes = [], valides = [], vus = {};
+  cles.forEach((k) => {
+    if (vus[k]) return;
+    vus[k] = true;
+    const p = decouper(k);
+    if (!(p.famille in D.quota_mois)) {
+      alertes.push(nouvelleAlerte("D", "Famille inconnue du sondage : " + p.famille, [], p.famille, "D3"));
+    } else if (!CR[p.creneau]) {
+      alertes.push(nouvelleAlerte("D", "Créneau inconnu du sondage : " + p.creneau, [], p.famille, "D3"));
+    } else {
+      valides.push(p);
+    }
+  });
+  alertes.push(...violationsDures(D, valides, CR));
+
+  const semaines = Array.from(new Set(D.planning.creneaux.map((c) => c.semaine))).sort();
+  const parents = {}, totaux = {}, parSemaine = {};
+  D.planning.creneaux.forEach((c) => { parents[c.id] = []; });
+  Object.keys(D.quota_mois).forEach((f) => {
+    totaux[f] = 0;
+    parSemaine[f] = {};
+    semaines.forEach((s) => { parSemaine[f][s] = 0; });
+  });
+  valides.forEach(({ famille: f, creneau: c }) => {
+    parents[c].push(f);
+    totaux[f] += 1;
+    parSemaine[f][CR[c].semaine] += 1;
+  });
+  D.planning.creneaux.forEach((cr) => {
+    const n = parents[cr.id].length, lib = D.libelles[cr.id];
+    parents[cr.id].sort();
+    if (n === 0) {
+      alertes.push(nouvelleAlerte("A1", "Créneau sans parent : " + lib, [cr.id]));
+    } else if (n > D.max_parents_par_creneau) {
+      alertes.push(nouvelleAlerte("A2", n + " parents sur " + lib + " (" + parents[cr.id].join(", ") +
+        ") : le maximum prévu est " + D.max_parents_par_creneau, [cr.id]));
+    }
+  });
+  Object.keys(D.quota_mois).sort().forEach((f) => {
+    if (totaux[f] !== D.quota_mois[f]) {
+      alertes.push(nouvelleAlerte("A3", "La famille " + f + " a " + totaux[f] +
+        " perm(s) sur le mois, son quota est de " + D.quota_mois[f], [], f));
+    }
+  });
+  D.planning.alertes.filter((a) => a.code === "A4").forEach((a) => {
+    alertes.push(nouvelleAlerte("A4", a.message));
+  });
+  valides.forEach(({ famille: f, creneau: c }) => {
+    if (dispoDe(D, f, c) === "si_besoin") {
+      alertes.push(nouvelleAlerte("A6", "La famille " + f + " est placée sur " + D.libelles[c] +
+        " alors qu'elle avait répondu « si besoin »", [c], f));
+    }
+  });
+  alertes.sort((a, b) => (a.code + (a.creneau || "") + (a.famille || "") + a.message) <
+                         (b.code + (b.creneau || "") + (b.famille || "") + b.message) ? -1 : 1);
+  return { parents, totaux, parSemaine, alertes };
+}
+
+function compter(alertes, code) { return alertes.filter((a) => a.code === code).length; }
+
+// Gravité de la case : "rouge", "orange" ou "" (neutre).
+function graviteCase(alertes, creneau) {
+  let g = "";
+  alertes.forEach((a) => {
+    if (a.creneaux.indexOf(creneau) < 0) return;
+    if (a.gravite === "rouge") g = "rouge";
+    else if (a.gravite === "orange" && g !== "rouge") g = "orange";
+  });
+  return g;
+}
+
+// Changements nets entre la base (planning calculé) et l'état courant. Entrées : tableaux de clés.
+function changementsNets(base, courant) {
+  const b = new Set(base), c = new Set(courant);
+  const ajouts = courant.filter((k) => !b.has(k));
+  const retraits = base.filter((k) => !c.has(k));
+  const conv = (action) => (k) => ({ action, famille: decouper(k).famille, creneau: decouper(k).creneau });
+  return Array.from(new Set(ajouts)).sort().map(conv("ajouter"))
+    .concat(Array.from(new Set(retraits)).sort().map(conv("retirer")));
+}
+/* CORE:END */
+</script>
+
+<script>
+(function () {
+"use strict";
+const D = JSON.parse(document.getElementById("donnees").textContent);
+const CR = indexCreneaux(D);
+const BASE = D.planning.affectations.map((a) => cle(a.famille, a.creneau));
+const CLE_STOCKAGE = "arbitrage-perms-" + D.planning.empreinte;
+const FAMILLES = Object.keys(D.quota_mois).sort();
+const SEMAINES = Array.from(new Set(D.planning.creneaux.map((c) => c.semaine))).sort();
+const JOURS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
+const RANG = { rouge: 0, orange: 1, jaune: 2, gris: 3 };
+
+const etat = { courant: new Set(BASE), histo: [], sel: null, voirAbsents: false, famSel: null };
+let calcul = null;
+
+// ---------------------------------------------------------------- utilitaires DOM
+
+function el(tag, attrs, enfants) {
+  const n = document.createElement(tag);
+  Object.keys(attrs || {}).forEach((k) => {
+    if (attrs[k] === null || attrs[k] === undefined) return;
+    if (k === "class") n.className = attrs[k];
+    else if (k === "texte") n.textContent = attrs[k];
+    else if (k.slice(0, 2) === "on") n.addEventListener(k.slice(2), attrs[k]);
+    else n.setAttribute(k, attrs[k]);
+  });
+  (enfants || []).forEach((e) => { if (e) n.appendChild(typeof e === "string" ? document.createTextNode(e) : e); });
+  return n;
+}
+
+function vider(n) { while (n.firstChild) n.removeChild(n.firstChild); return n; }
+function $(id) { return document.getElementById(id); }
+function pluriel(n, mot) { return n + " " + mot + (n > 1 ? "s" : ""); }
+
+function ajouterJours(iso, n) {
+  const p = iso.split("-").map(Number);
+  const d = new Date(Date.UTC(p[0], p[1] - 1, p[2] + n));
+  return d.toISOString().slice(0, 10);
+}
+
+function jourMois(iso) { const p = iso.split("-"); return Number(p[2]) + "/" + Number(p[1]); }
+
+function dateCommentaire(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}))?/.exec(iso || "");
+  if (!m) return iso || "";
+  return Number(m[3]) + "/" + Number(m[2]) + (m[4] ? " à " + m[4] + ":" + m[5] : "");
+}
+
+function dispoLibelle(f, c) {
+  const d = dispoDe(D, f, c);
+  if ((D.absences[f] || []).indexOf(CR[c].semaine) >= 0) return "absente cette semaine";
+  return d === "oui" ? "disponible" : d === "si_besoin" ? "si besoin" : "pas disponible";
+}
+
+// ---------------------------------------------------------------- état et stockage
+
+function charger() {
+  try {
+    const o = JSON.parse(localStorage.getItem(CLE_STOCKAGE) || "null");
+    if (!o || !Array.isArray(o.courant) || !Array.isArray(o.histo)) return;
+    const ok = (k) => { const p = decouper(k); return p.famille in D.quota_mois && !!CR[p.creneau]; };
+    if (!o.courant.every((k) => typeof k === "string" && ok(k))) return;
+    const histoOk = o.histo.every((h) => h && (h.action === "ajouter" || h.action === "retirer") &&
+      ok(cle(h.famille, h.creneau)));
+    if (!histoOk) return;
+    etat.courant = new Set(o.courant);
+    etat.histo = o.histo;
+  } catch (e) { /* page utilisable sans stockage */ }
+}
+
+function sauver() {
+  try {
+    localStorage.setItem(CLE_STOCKAGE, JSON.stringify({ courant: Array.from(etat.courant), histo: etat.histo }));
+  } catch (e) { /* page utilisable sans stockage */ }
+}
+
+function dire(texte, avert) {
+  const s = $("statut");
+  s.textContent = texte;
+  s.className = avert ? "avert" : "";
+}
+
+function modifier(action, f, c) {
+  const k = cle(f, c);
+  if (action === "ajouter") {
+    if (etat.courant.has(k)) return;
+    etat.courant.add(k);
+  } else {
+    if (!etat.courant.has(k)) return;
+    etat.courant.delete(k);
+  }
+  etat.histo.push({ action, famille: f, creneau: c });
+  sauver();
+  rendre();
+}
+
+function annuler() {
+  const h = etat.histo.pop();
+  if (!h) return;
+  const k = cle(h.famille, h.creneau);
+  if (h.action === "ajouter") etat.courant.delete(k); else etat.courant.add(k);
+  sauver();
+  rendre();
+  dire("Dernier changement annulé : " + phraseHisto(h) + ".");
+}
+
+function repartir() {
+  if (etat.histo.length && typeof confirm === "function" &&
+      !confirm("Repartir du planning calculé ? Vos choix en cours seront effacés.")) return;
+  etat.courant = new Set(BASE);
+  etat.histo = [];
+  sauver();
+  rendre();
+  dire("Retour au planning calculé.");
+}
+
+function phraseHisto(h) {
+  return h.famille + (h.action === "ajouter" ? " ajoutée sur " : " retirée de ") + D.libelles[h.creneau];
+}
+
+function isoLocal(d) {
+  const p = (n) => String(n).padStart(2, "0");
+  return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) + "T" +
+    p(d.getHours()) + ":" + p(d.getMinutes()) + ":" + p(d.getSeconds());
+}
+
+function exporter() {
+  const changements = changementsNets(BASE, Array.from(etat.courant));
+  const o = { empreinte: D.planning.empreinte, exporte_le: isoLocal(new Date()), changements };
+  const blob = new Blob([JSON.stringify(o, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = el("a", { href: url, download: "arbitrages.json" });
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  dire(changements.length
+    ? "Fichier arbitrages.json téléchargé (" + pluriel(changements.length, "changement") +
+      "). " + (D.apres_export || "Revenez dans le chat pour la suite.")
+    : "Fichier arbitrages.json téléchargé, sans aucun changement par rapport au planning calculé.");
+}
+
+// ---------------------------------------------------------------- sélection
+
+function selectionner(c, focus) {
+  etat.sel = c;
+  rendre();
+  if (focus) {
+    const b = $("case-" + c);
+    if (b) { b.scrollIntoView({ block: "nearest" }); b.focus(); }
+  }
+}
+
+function aller(a) {
+  if (a.creneau) { selectionner(a.creneau, true); return; }
+  if (a.famille) {
+    etat.famSel = a.famille;
+    rendre();
+    const l = $("fam-" + a.famille);
+    if (l) { l.scrollIntoView({ block: "nearest" }); }
+  }
+}
+
+// ---------------------------------------------------------------- rendu
+
+function rendreEntete() {
+  const al = calcul.alertes;
+  $("titre").textContent = D.planning.titre || "Arbitrage du planning";
+  document.title = "Arbitrage : " + (D.planning.titre || "planning");
+  const vides = compter(al, "A1"), trop = compter(al, "A2"), quota = compter(al, "A3");
+  const comm = compter(al, "A4"), dures = compter(al, "D");
+  const puce = (code, n, texte, aucun, g) => el("span", { class: "puce " + (n ? g : "ok"), "data-testid": "resume-" + code,
+    texte: n ? texte : aucun });
+  const r = vider($("resume"));
+  r.appendChild(puce("A1", vides, pluriel(vides, "créneau") + " vide" + (vides > 1 ? "s" : ""), "Aucun créneau vide", "rouge"));
+  r.appendChild(puce("A2", trop, pluriel(trop, "créneau") + " à " + (D.max_parents_par_creneau + 1) + " parents ou plus",
+    "Aucun créneau surchargé", "orange"));
+  r.appendChild(puce("A3", quota, pluriel(quota, "famille") + " hors quota", "Toutes les familles à leur quota", "orange"));
+  r.appendChild(puce("A4", comm, pluriel(comm, "commentaire") + " à traiter", "Aucun commentaire à traiter", "jaune"));
+  if (dures) r.appendChild(puce("D", dures, pluriel(dures, "règle") + " non respectée" + (dures > 1 ? "s" : ""), "", "rouge"));
+  const parents = Object.values(calcul.parents).map((l) => l.length);
+  const deux = parents.filter((n) => n >= 2).length, un = parents.filter((n) => n === 1).length;
+  const k = $("constat");
+  if (vides || dures) {
+    k.className = "constat alerte";
+    k.textContent = "À trancher : " + [vides ? pluriel(vides, "créneau") + " sans parent" : "",
+      dures ? pluriel(dures, "règle") + " non respectée" + (dures > 1 ? "s" : "") : ""].filter(Boolean).join(", ") + ".";
+  } else {
+    k.className = "constat";
+    k.textContent = "Planning complet : " + pluriel(deux, "créneau") + " à 2 parents ou plus, " + un + " à 1 parent.";
+  }
+  $("btn-annuler").disabled = etat.histo.length === 0;
+  $("btn-reset").disabled = etat.histo.length === 0;
+}
+
+function etiquette(f, c) {
+  const sib = dispoDe(D, f, c) === "si_besoin";
+  return el("span", { class: "etiq" + (sib ? " sib" : ""), texte: f,
+    title: sib ? "Répondu « si besoin »" : "" });
+}
+
+function creerCase(c, quand) {
+  const cr = CR[c];
+  const parents = calcul.parents[c];
+  const g = graviteCase(calcul.alertes, c);
+  const n = parents.length;
+  const trop = n > D.max_parents_par_creneau;
+  const regle = calcul.alertes.some((a) => a.code === "D" && a.creneaux.indexOf(c) >= 0);
+  const marque = n === 0 ? "! Vide" : regle ? "! Règle" : trop ? "▲ Trop" : "";
+  const tete = el("span", { class: "case-tete" }, [
+    el("span", { texte: cr.demi === "M" ? "Matin" : "Après-midi" }),
+    el("span", { class: "nb", title: pluriel(n, "parent") + " sur " + D.max_parents_par_creneau + " prévus" },
+      [marque ? el("span", { class: "badge", texte: marque }) : null, n + "/" + D.max_parents_par_creneau]),
+  ]);
+  const etiqs = el("span", { class: "etiqs" }, parents.map((f) => etiquette(f, c)));
+  const segments = Math.max(n, D.max_parents_par_creneau);
+  const jauge = el("span", { class: "jauge", "aria-hidden": "true" }, Array.from({ length: segments }, (_, i) =>
+    el("i", { class: i < Math.min(n, D.max_parents_par_creneau) ? "plein" : i < n ? "trop" : "" })));
+  const resume = D.libelles[c] + " : " + (n ? parents.join(", ") : "aucune famille") + ", " + pluriel(n, "parent") +
+    (n === 0 ? ", créneau vide" : regle ? ", règle non respectée" : trop ? ", trop de parents" : "");
+  return el("button", { type: "button", id: "case-" + c, "data-f": "case-" + c,
+    class: "case" + (g ? " " + g : "") + (etat.sel === c ? " selection" : ""),
+    "aria-label": resume, "aria-pressed": etat.sel === c ? "true" : "false",
+    onclick: () => selectionner(c, true) }, [tete, etiqs, jauge]);
+}
+
+function caseFermee(d, demi) {
+  return el("div", { class: "case ferme", "data-testid": "ferme-" + d + "_" + demi,
+    texte: (demi === "M" ? "Matin" : "Après-midi") + " : fermé" });
+}
+
+function titreSemaine(s) {
+  const t = D.titres_semaines[s] || s;
+  const m = /^Semaine du (.+)$/.exec(t);
+  return m ? [el("span", { texte: "Semaine du" }), m[1]] : [t];
+}
+
+function rendreGrille() {
+  const parDate = {};
+  D.planning.creneaux.forEach((c) => { (parDate[c.date] = parDate[c.date] || {})[c.demi] = c.id; });
+  const maxJour = Math.max(4, ...D.planning.creneaux.map((c) => (new Date(c.date + "T00:00:00Z").getUTCDay() + 6) % 7));
+  const t = el("table", { class: "grille" });
+  const tr0 = el("tr", {}, [el("th", { scope: "col", texte: "" })]);
+  for (let j = 0; j <= maxJour; j++) tr0.appendChild(el("th", { scope: "col", texte: JOURS[j] }));
+  t.appendChild(el("thead", {}, [tr0]));
+  const corps = el("tbody");
+  SEMAINES.forEach((s) => {
+    const tr = el("tr", {}, [el("th", { scope: "row", class: "sem", "aria-label": D.titres_semaines[s] }, titreSemaine(s))]);
+    for (let j = 0; j <= maxJour; j++) {
+      const d = ajouterJours(s, j), cases = parDate[d] || {};
+      tr.appendChild(el("td", { class: "jour" }, [
+        el("p", { class: "date-jour", texte: jourMois(d) }),
+        cases.M ? creerCase(cases.M) : caseFermee(d, "M"),
+        cases.A ? creerCase(cases.A) : caseFermee(d, "A"),
+      ]));
+    }
+    corps.appendChild(tr);
+  });
+  t.appendChild(corps);
+  vider($("grille-zone")).appendChild(t);
+}
+
+function ligneFamille(f, c) {
+  const cr = CR[c];
+  const semaine = calcul.parSemaine[f][cr.semaine];
+  const r = rangDispo(f, c);
+  return el("span", {}, [
+    el("span", { class: "qui", texte: f }),
+    el("span", { class: "dispo " + (r === 0 ? "oui" : r === 1 ? "sib" : "non"), texte: dispoLibelle(f, c) }),
+    el("span", { class: "compteurs", "data-testid": "compteurs-" + f }, [
+      "Cette semaine ", el("b", { texte: semaine + "/" + D.plafond_hebdo }),
+      " · Mois ", el("b", { texte: calcul.totaux[f] + "/" + D.quota_mois[f] }),
+    ]),
+  ]);
+}
+
+function rangDispo(f, c) {
+  if ((D.absences[f] || []).indexOf(CR[c].semaine) >= 0) return 3;
+  const d = dispoDe(D, f, c);
+  return d === "oui" ? 0 : d === "si_besoin" ? 1 : 2;
+}
+
+function rendreDetail() {
+  const b = vider($("detail"));
+  const c = etat.sel;
+  if (!c) {
+    b.appendChild(el("h2", { texte: "Case sélectionnée" }));
+    b.appendChild(el("p", { class: "doux", texte: "Cliquez sur une case de la grille pour la modifier." }));
+    return;
+  }
+  b.appendChild(el("h2", { texte: D.libelles[c] }));
+  const affectees = calcul.parents[c];
+  b.appendChild(el("p", { class: "detail-meta", texte: pluriel(affectees.length, "parent") +
+    " sur " + D.max_parents_par_creneau + " prévus" }));
+  b.appendChild(el("h3", { texte: "Familles affectées" }));
+  if (!affectees.length) b.appendChild(el("p", { class: "avert-ligne", texte: "Aucune famille sur ce créneau." }));
+  affectees.forEach((f) => {
+    const hors = rangDispo(f, c) >= 2;
+    b.appendChild(el("div", { class: "cand", "data-testid": "ligne-" + f }, [
+      el("span", {}, [ligneFamille(f, c), hors ? el("span", { class: "avert-ligne", texte: "Hors disponibilité : règle non respectée." }) : null]),
+      el("button", { type: "button", class: "btn petit", "data-f": "ret-" + f, texte: "Retirer",
+        "aria-label": "Retirer " + f + " de " + D.libelles[c], onclick: () => retirerAvecMessage(f, c) }),
+    ]));
+  });
+  b.appendChild(el("h3", { texte: "Familles qui peuvent venir" }));
+  const dejaLa = new Set(affectees);
+  const candidates = FAMILLES.filter((f) => !dejaLa.has(f))
+    .sort((x, y) => rangDispo(x, c) - rangDispo(y, c) || (x < y ? -1 : 1));
+  const dispo = candidates.filter((f) => rangDispo(f, c) < 2);
+  const autres = candidates.filter((f) => rangDispo(f, c) >= 2);
+  if (!dispo.length) b.appendChild(el("p", { class: "doux", texte: "Aucune autre famille disponible." }));
+  dispo.forEach((f) => b.appendChild(ligneCandidate(f, c, false)));
+  b.appendChild(el("label", { class: "opt" }, [
+    el("input", { type: "checkbox", id: "voir-absents", "data-f": "voir-absents", onchange: (e) => { etat.voirAbsents = e.target.checked; rendre(); } }),
+    "afficher aussi les familles non disponibles (" + autres.length + ")",
+  ]));
+  $("voir-absents") && ($("voir-absents").checked = etat.voirAbsents);
+  if (etat.voirAbsents) autres.forEach((f) => b.appendChild(ligneCandidate(f, c, true)));
+}
+
+function ligneCandidate(f, c, horsDispo) {
+  return el("div", { class: "cand", "data-testid": "ligne-" + f }, [
+    ligneFamille(f, c),
+    el("button", { type: "button", class: "btn petit" + (horsDispo ? " risque" : ""), "data-f": "add-" + f,
+      texte: horsDispo ? "Ajouter quand même" : "Ajouter",
+      "aria-label": "Ajouter " + f + " sur " + D.libelles[c],
+      onclick: () => ajouterAvecMessage(f, c, horsDispo) }),
+  ]);
+}
+
+function ajouterAvecMessage(f, c, horsDispo) {
+  modifier("ajouter", f, c);
+  if (horsDispo) {
+    dire("Attention : " + f + " n'est pas disponible sur " + D.libelles[c] +
+      " (" + dispoLibelle(f, c) + "). Cette affectation ne respecte pas une règle dure et apparaît en rouge dans les alertes.", true);
+  } else {
+    dire(f + " ajoutée sur " + D.libelles[c] + ".");
+  }
+}
+
+function retirerAvecMessage(f, c) {
+  modifier("retirer", f, c);
+  dire(f + " retirée de " + D.libelles[c] + ".");
+}
+
+function rendreAlertes() {
+  const al = calcul.alertes;
+  const nt = $("non-traduits");
+  const a4 = al.filter((a) => a.code === "A4");
+  nt.hidden = a4.length === 0;
+  vider(nt);
+  if (a4.length) {
+    nt.appendChild(el("h2", { texte: "Commentaires à traiter à la main" }));
+    nt.appendChild(el("ul", { class: "liste" }, a4.map((a) => el("li", { texte: a.message }))));
+  }
+  const autres = al.filter((a) => a.code !== "A4")
+    .sort((x, y) => RANG[x.gravite] - RANG[y.gravite]);
+  const b = vider($("alertes"));
+  b.appendChild(el("h2", { texte: "Alertes (" + autres.length + ")" }));
+  if (!autres.length) b.appendChild(el("p", { class: "bien", texte: "Aucune alerte : le planning respecte toutes les règles." }));
+  b.appendChild(el("ul", { class: "liste" }, autres.map((a) => el("li", {}, [
+    el("button", { type: "button", class: "alerte-btn", "data-f": "al-" + a.code + (a.creneau || "") + (a.famille || ""),
+      onclick: () => aller(a) }, [el("span", { class: "code " + a.gravite, texte: a.regle || a.code }), a.message]),
+  ]))));
+}
+
+function rendreFamilles() {
+  const b = vider($("familles"));
+  b.appendChild(el("h2", { texte: "Familles : perms du mois" }));
+  const t = el("table", { class: "fam" });
+  t.appendChild(el("thead", {}, [el("tr", {}, [
+    el("th", { scope: "col", texte: "Famille" }), el("th", { scope: "col", texte: "Mois / quota" }),
+    ...SEMAINES.map((s) => el("th", { scope: "col", class: "s", title: D.titres_semaines[s], texte: jourMois(s) }))])]));
+  const corps = el("tbody");
+  FAMILLES.forEach((f) => {
+    const tot = calcul.totaux[f], quota = D.quota_mois[f];
+    const depasse = SEMAINES.some((s) => calcul.parSemaine[f][s] > D.plafond_hebdo);
+    const classe = depasse ? "depasse" : tot !== quota ? "ecart" : "";
+    const ecart = tot === quota ? "" : tot < quota ? " (manque " + (quota - tot) + ")" : " (en trop " + (tot - quota) + ")";
+    corps.appendChild(el("tr", { id: "fam-" + f, class: classe + (etat.famSel === f ? " choisie" : "") }, [
+      el("td", { class: "nom", texte: f }),
+      el("td", { class: "tot", texte: tot + " / " + quota + ecart }),
+      ...SEMAINES.map((s) => {
+        const n = calcul.parSemaine[f][s];
+        const cl = n > D.plafond_hebdo ? "trop" : n === 0 ? "zero" : n > 1 ? "deux" : "";
+        return el("td", { class: "s " + cl, texte: String(n) });
+      }),
+    ]));
+  });
+  t.appendChild(corps);
+  b.appendChild(t);
+  b.appendChild(el("p", { class: "doux", texte: "Une colonne par semaine, titrée par la date du lundi. " +
+    "En bleu : 2 perms dans la semaine (rattrapage). Plafond : " + D.plafond_hebdo + " par semaine." }));
+}
+
+function rendreCommentaires() {
+  const b = vider($("commentaires"));
+  b.appendChild(el("h2", { texte: "Commentaires du sondage (" + D.commentaires.length + ")" }));
+  if (!D.commentaires.length) b.appendChild(el("p", { class: "doux", texte: "Aucun commentaire." }));
+  D.commentaires.forEach((c) => b.appendChild(el("div", { class: "comm" }, [
+    el("div", { class: "qui" }, [c.auteur, el("span", { texte: ", " + dateCommentaire(c.date) })]),
+    el("p", { texte: c.texte }),
+  ])));
+}
+
+function rendreHisto() {
+  const b = vider($("histo"));
+  b.appendChild(el("h2", { texte: "Historique des changements (" + etat.histo.length + ")" }));
+  if (!etat.histo.length) b.appendChild(el("p", { class: "doux", texte: "Aucun changement pour l'instant." }));
+  b.appendChild(el("ul", { class: "liste" }, etat.histo.slice().reverse().map((h) => el("li", { texte: phraseHisto(h) }))));
+  b.appendChild(el("button", { type: "button", class: "btn petit", "data-f": "annuler-histo", texte: "Annuler le dernier changement",
+    disabled: etat.histo.length ? null : "disabled", onclick: annuler }));
+}
+
+function rendre() {
+  const actif = document.activeElement && document.activeElement.getAttribute
+    ? document.activeElement.getAttribute("data-f") : null;
+  calcul = calculer(D, Array.from(etat.courant));
+  rendreEntete();
+  rendreGrille();
+  rendreDetail();
+  rendreAlertes();
+  rendreFamilles();
+  rendreCommentaires();
+  rendreHisto();
+  if (actif) {
+    const n = document.querySelector('[data-f="' + actif.replace(/"/g, "") + '"]');
+    if (n) n.focus();
+  }
+}
+
+$("btn-annuler").addEventListener("click", annuler);
+$("btn-reset").addEventListener("click", repartir);
+$("btn-export").addEventListener("click", exporter);
+charger();
+rendre();
+})();
+</script>
+</body>
+</html>

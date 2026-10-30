@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Reproduction de l'écran SmartScreen</title>
+<!-- Source des captures 01 et 02 du guide (rendu par public/captures.py). Reproduction fidèle des
+     textes de Windows 11 ; la capture réelle de l'écran SmartScreen n'est pas possible sans session ouverte. -->
+<style>
+  body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; background: #e9e9e9; }
+  .cadre { width: 720px; height: 470px; background: #1f5fa8; color: #fff; padding: 36px 44px; box-sizing: border-box;
+           position: relative; }
+  h1 { font-weight: 300; font-size: 34px; margin: 0 0 22px; }
+  p { font-size: 15px; line-height: 1.5; margin: 0 0 14px; max-width: 600px; }
+  a { color: #fff; text-decoration: underline; font-size: 15px; }
+  .infos { margin-top: 18px; font-size: 15px; line-height: 1.7; }
+  .boutons { position: absolute; right: 44px; bottom: 32px; display: flex; gap: 10px; }
+  button { font: inherit; font-size: 15px; padding: 7px 26px; border: 2px solid #fff; background: transparent; color: #fff; }
+  .repere { outline: 4px solid #ffb900; outline-offset: 4px; }
+  .legende { position: absolute; left: 44px; bottom: 30px; max-width: 200px; font-size: 12px; line-height: 1.4;
+             opacity: .85; margin: 0; }
+  .etape2 .seul1, .etape1 .seul2 { display: none; }
+</style>
+</head>
+<body>
+<div class="cadre" id="cadre">
+  <h1>Windows a protégé votre ordinateur</h1>
+  <p>Microsoft Defender SmartScreen a empêché le démarrage d'une application non reconnue. L'exécution de cette application peut présenter un risque pour votre ordinateur.</p>
+  <a href="#" class="seul1 repere">Informations complémentaires</a>
+  <div class="infos seul2">Application : Installer-Planning-des-perms.exe<br>Éditeur : Éditeur inconnu</div>
+  <div class="boutons">
+    <button class="seul2 repere">Exécuter quand même</button>
+    <button>Ne pas exécuter</button>
+  </div>
+  <p class="legende">Reproduction de l'écran de Windows. Encadré jaune : où cliquer.</p>
+</div>
+<script>document.body.className = location.hash === "#2" ? "etape2" : "etape1";</script>
+</body>
+</html>

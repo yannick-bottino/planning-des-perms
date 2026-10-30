@@ -1,0 +1,33 @@
+familles:
+  Alma:
+    absences:
+    - '2027-02-15'
+    source: 'commentaire : vacances semaine du 15/02'
+  Capucine:
+    absences:
+    - '2027-02-15'
+    source: 'commentaire : vacances semaine du 15/02'
+  Elio:
+    absences:
+    - '2027-02-15'
+    source: 'commentaire : vacances semaine du 15/02'
+  Gaspard:
+    absences:
+    - '2027-02-15'
+    source: 'commentaire : vacances semaine du 15/02'
+  Jade:
+    absences:
+    - '2027-02-15'
+    source: 'commentaire : vacances semaine du 15/02'
+  Lison:
+    absences:
+    - '2027-02-15'
+    source: 'commentaire : vacances semaine du 15/02'
+  Octave:
+    absences:
+    - '2027-02-15'
+    source: 'commentaire : vacances semaine du 15/02'
+  Quitterie:
+    absences:
+    - '2027-02-15'
+    source: 'commentaire : vacances semaine du 15/02'

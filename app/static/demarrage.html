@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Planning des permanences</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<main id="contenu">
+  <section aria-labelledby="t-attente">
+    <h1 id="t-attente">Planning des permanences</h1>
+    <div id="etat" class="carte" role="status">
+      <p><strong>L'outil démarre.</strong> La première fois, cela peut prendre jusqu'à une minute.</p>
+      <p class="aide">Cette page s'ouvre toute seule dès que l'outil est prêt. Vous n'avez rien à faire.</p>
+    </div>
+    <div id="echec" class="alerte rouge" role="alert" hidden>
+      <p><strong>L'outil n'a pas démarré.</strong> Relancez-le depuis l'icône du bureau.</p>
+      <p>Si le problème continue, envoyez le fichier journal.txt (dossier %LOCALAPPDATA%\balustrade-planning) à la personne qui maintient l'outil.</p>
+    </div>
+  </section>
+</main>
+<script src="demarrage.js"></script>
+</body>
+</html>
