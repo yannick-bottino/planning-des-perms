@@ -39,3 +39,5 @@ Tout reste sur votre ordinateur : les plannings dans `balustrade-planning`, la c
 ---
 
 Pour les personnes qui maintiennent l'outil : construction de l'installeur dans [installeur/README-installeur.md](installeur/README-installeur.md), spécifications dans [docs/specs/](docs/specs/). Ce dépôt est généré depuis un dépôt privé par un export à sens unique : les modifications se font là-bas.
+
+Licence MIT (fichier [LICENSE](LICENSE)) : réutilisation libre, sans garantie.
