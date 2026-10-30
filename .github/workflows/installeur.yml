@@ -41,18 +41,20 @@ jobs:
         # Dépendances de l'outil : requirements.txt (mêmes versions que le bloc PEP 723 de app/serveur.py).
         run: uv run --python 3.12 --with-requirements requirements.txt --with pytest --with pandas python -m pytest tests -m "not e2e and not lancement and not reel"
 
-      - name: Inno Setup (version 6.3 ou plus)
+      - name: Inno Setup
         shell: pwsh
         run: |
-          $iscc = Get-Command ISCC.exe -ErrorAction SilentlyContinue
-          $chemin = if ($iscc) { $iscc.Source } else { "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
-          if (-not (Test-Path $chemin)) {
+          # Le vrai ISCC.exe d'abord : celui du PATH peut être une cale Chocolatey, sans version lisible.
+          $connus = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe", "${env:ProgramFiles}\Inno Setup 6\ISCC.exe"
+          $chemin = $connus | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $chemin) {
             choco install innosetup -y --no-progress
-            $chemin = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+            $chemin = $connus | Where-Object { Test-Path $_ } | Select-Object -First 1
           }
-          $v = [version](Get-Item $chemin).VersionInfo.ProductVersion
-          Write-Host "ISCC $v ($chemin)"
-          if ($v -lt [version]"6.3.0") { throw "Inno Setup $v trop ancien (6.3 minimum)" }
+          if (-not $chemin) { throw "ISCC.exe introuvable après installation d'Inno Setup" }
+          # Pas de contrôle de version : ISCC.exe ne l'expose pas (propriétés à 0.0.0.0, bannière sans numéro).
+          # Un Inno Setup antérieur à 6.3 échouerait à la compilation sur « x64compatible », avec un message clair.
+          Write-Host "ISCC : $chemin"
           "ISCC=$chemin" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Construire l'installeur
